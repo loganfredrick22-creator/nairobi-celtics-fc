@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, Users, BookOpen, Trophy, HandHeart } from 'lucide-react';
+import { Heart, Users, BookOpen, Trophy, HeartHandshake } from 'lucide-react';
 import Button from '../components/ui/Button';
 import toast from 'react-hot-toast';
 
@@ -82,7 +82,7 @@ export default function CommunityPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-lg mx-auto">
             <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-8">
-              <HandHeart className="text-green mx-auto mb-3" size={40} />
+              <HeartHandshake className="text-green mx-auto mb-3" size={40} />
               <h2 className="text-3xl font-display text-white">Volunteer With Us</h2>
               <p className="text-gray-400 text-sm mt-2">Join the Celtics for All team and make a difference in your community.</p>
             </motion.div>
