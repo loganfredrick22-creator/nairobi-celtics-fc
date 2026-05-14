@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { api } from '../services/api';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
+import FixtureCard from '../components/fixtures/FixtureCard';
 
 const filters = ['All', 'Home', 'Away'];
 const competitions = ['All', 'KSL', 'Kenyan Cup', 'CAF CL'];
@@ -80,41 +81,10 @@ export default function FixturesPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {loading ? <Spinner className="py-20" /> : (
             <div className="grid lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-2">
-                {fixtures.length === 0 && <div className="text-center py-12 text-gray-500">No fixtures found.</div>}
+              <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
+                {fixtures.length === 0 && <div className="col-span-2 text-center py-12 text-gray-500">No fixtures found.</div>}
                 {fixtures.map((f, i) => (
-                  <motion.div key={f._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                    className="bg-card rounded-xl p-4 border border-white/5 flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="text-center flex-shrink-0 w-12">
-                        <div className="text-xs text-gray-500">{new Date(f.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
-                        <div className="text-[10px] text-gray-600">{f.kickoff}</div>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-body font-medium text-sm text-white">{f.isHomeGame ? 'NCFC' : f.opponent}</span>
-                          <span className="text-xs text-gray-500">vs</span>
-                          <span className="font-body font-medium text-sm text-white">{f.isHomeGame ? f.opponent : 'NCFC'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-gray-600">{f.competition}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${f.venue === 'home' ? 'text-green' : 'text-yellow-400'}`}>{f.venue === 'home' ? 'H' : 'A'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      {f.status === 'completed' && f.result?.outcome ? (
-                        <Badge variant={f.result.outcome === 'W' ? 'success' : f.result.outcome === 'D' ? 'warning' : 'danger'}>
-                          {f.result.outcome} {f.result.homeScore}-{f.result.awayScore}
-                        </Badge>
-                      ) : f.status === 'scheduled' ? (
-                        <span className="text-xs text-gray-500">Scheduled</span>
-                      ) : (
-                        <Badge variant="info">{f.status}</Badge>
-                      )}
-                    </div>
-                  </motion.div>
+                  <FixtureCard key={f._id} fixture={f} linkToTickets={true} showFull={true} />
                 ))}
               </div>
 

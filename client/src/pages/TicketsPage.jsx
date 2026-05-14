@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Check, Ticket } from 'lucide-react';
 import { ticketService } from '../services/ticketService';
@@ -10,6 +10,7 @@ import { formatDate } from '../utils/formatDate';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
+import FixtureCard from '../components/fixtures/FixtureCard';
 import toast from 'react-hot-toast';
 
 const steps = ['Match', 'Seat', 'Quantity', 'Details', 'Payment'];
@@ -22,6 +23,7 @@ const collectionPoints = [
 
 export default function TicketsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const store = useTicketStore();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,10 +32,21 @@ export default function TicketsPage() {
 
   useEffect(() => {
     ticketService.getAvailableMatches()
-      .then(({ data }) => setMatches(data.data.matches || []))
+      .then(({ data }) => {
+        const all = data.data.matches || [];
+        setMatches(all);
+        const preselected = searchParams.get('match');
+        if (preselected) {
+          const found = all.find((m) => m._id === preselected);
+          if (found) {
+            store.setSelectedMatch(found);
+            store.setStep(1);
+          }
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [searchParams]);
 
   const handlePurchase = async () => {
     setProcessing(true);
@@ -98,20 +111,13 @@ export default function TicketsPage() {
               {matches.length === 0 ? (
                 <div className="text-center py-12 text-gray-500"><Ticket size={40} className="mx-auto mb-3 opacity-30" /><p>No upcoming home matches available for ticketing.</p></div>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid sm:grid-cols-2 gap-4">
                   {matches.map((m) => (
-                    <button key={m._id} onClick={() => { store.setSelectedMatch(m); store.nextStep(); }}
-                      className={`bg-card rounded-xl p-4 border text-left transition-all ${store.selectedMatch?._id === m._id ? 'border-green' : 'border-white/5'} card-hover`}
+                    <div key={m._id} onClick={() => { store.setSelectedMatch(m); store.nextStep(); }}
+                      className={`cursor-pointer ${store.selectedMatch?._id === m._id ? 'ring-2 ring-green rounded-xl' : ''}`}
                     >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-body font-semibold text-white">vs {m.opponent}</p>
-                          <p className="text-xs text-gray-400 mt-1">{formatDate(m.date)}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{m.stadium} | {m.kickoff}</p>
-                        </div>
-                        <Badge>{m.competition}</Badge>
-                      </div>
-                    </button>
+                      <FixtureCard fixture={m} showFull={true} />
+                    </div>
                   ))}
                 </div>
               )}
