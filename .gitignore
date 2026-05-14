@@ -6,5 +6,6 @@ build/
 .DS_Store
 Thumbs.db
 *.local
-client/public/images/**/*
-!client/public/images/crest.png
+client/public/images/*.psd
+client/public/images/*.ai
+client/public/images/*.tiff
