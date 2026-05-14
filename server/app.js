@@ -45,6 +45,26 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Nairobi Celtics FC API is running' });
 });
 
+app.post('/api/seed', async (req, res) => {
+  try {
+    const seedPlayers = require('./seed/seedPlayers');
+    const seedFixtures = require('./seed/seedFixtures');
+    const seedProducts = require('./seed/seedProducts');
+    const seedNews = require('./seed/seedNews');
+    const seedSeason = require('./seed/seedSeason');
+    const seedAdmin = require('./seed/seedAdmin');
+    await seedAdmin();
+    await seedPlayers();
+    await seedFixtures();
+    await seedProducts();
+    await seedNews();
+    await seedSeason();
+    res.json({ success: true, message: 'Database seeded successfully!' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/fixtures', fixtureRoutes);
