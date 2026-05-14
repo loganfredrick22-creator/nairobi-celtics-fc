@@ -62,7 +62,8 @@ const generateFixtures = () => {
 };
 
 const seedFixtures = async () => {
-  await Fixture.deleteMany({});
+  const count = await Fixture.countDocuments();
+  if (count > 0) { console.log(`Fixtures skipped: ${count} already exist`); return; }
   const fixtures = generateFixtures();
   await Fixture.insertMany(fixtures);
   console.log(`Fixtures seeded: ${fixtures.length} fixtures`);

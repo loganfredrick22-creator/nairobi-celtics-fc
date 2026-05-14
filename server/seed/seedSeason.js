@@ -11,7 +11,8 @@ const clubs = [
 const formOptions = ['W', 'D', 'L'];
 
 const seedSeason = async () => {
-  await Season.deleteMany({});
+  const count = await Season.countDocuments();
+  if (count > 0) { console.log(`Season skipped: ${count} already exist`); return; }
 
   const rawStandings = [
     { club: 'Nairobi Celtics FC', p: 24, w: 18, d: 4, l: 2, gf: 52, ga: 14 },

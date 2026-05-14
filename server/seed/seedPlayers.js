@@ -27,7 +27,8 @@ const players = [
 ];
 
 const seedPlayers = async () => {
-  await Player.deleteMany({});
+  const count = await Player.countDocuments();
+  if (count > 0) { console.log(`Players skipped: ${count} already exist`); return; }
   await Player.insertMany(players);
   console.log('Players seeded: 22 players');
 };

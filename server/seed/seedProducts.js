@@ -24,7 +24,8 @@ const products = [
 ];
 
 const seedProducts = async () => {
-  await Product.deleteMany({});
+  const count = await Product.countDocuments();
+  if (count > 0) { console.log(`Products skipped: ${count} already exist`); return; }
   await Product.insertMany(products);
   console.log('Products seeded: 20 products');
 };

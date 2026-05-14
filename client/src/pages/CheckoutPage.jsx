@@ -209,6 +209,7 @@ export default function CheckoutPage() {
                   {processing ? 'Processing...' : `Pay ${formatCurrency(total)}`}
                 </Button>
               </div>
+              <p className="text-xs text-gray-700 mt-3 text-center">⚠️ Payment simulation active — no real money moved. Integrate M-Pesa/Stripe for live payments.</p>
             </motion.div>
           )}
         </div>

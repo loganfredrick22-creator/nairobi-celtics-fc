@@ -16,7 +16,8 @@ const articles = [
 ];
 
 const seedNews = async () => {
-  await News.deleteMany({});
+  const count = await News.countDocuments();
+  if (count > 0) { console.log(`News skipped: ${count} already exist`); return; }
   await News.insertMany(articles);
   console.log('News seeded: 12 articles');
 };

@@ -223,10 +223,10 @@ export default function TicketsPage() {
 
               {store.deliveryMethod === 'courier' && (
                 <div className="space-y-3 mt-3">
-                  <input placeholder="Street Address" className="w-full" />
+                  <input placeholder="Street Address" value={store.buyer.street || ''} onChange={(e) => store.setBuyerField('street', e.target.value)} className="w-full" />
                   <div className="grid grid-cols-2 gap-3">
-                    <input placeholder="City" className="w-full" />
-                    <input placeholder="County" className="w-full" />
+                    <input placeholder="City" value={store.buyer.city || ''} onChange={(e) => store.setBuyerField('city', e.target.value)} className="w-full" />
+                    <input placeholder="County" value={store.buyer.county || ''} onChange={(e) => store.setBuyerField('county', e.target.value)} className="w-full" />
                   </div>
                 </div>
               )}
@@ -270,6 +270,8 @@ export default function TicketsPage() {
                   {processing ? 'Processing...' : `Pay ${formatCurrency(store.total)}`}
                 </Button>
               </div>
+
+              <p className="text-xs text-gray-700 mt-4 text-center">⚠️ Payment simulation active — no real money moved. Integrate M-Pesa/Stripe for live payments.</p>
             </motion.div>
           )}
         </div>

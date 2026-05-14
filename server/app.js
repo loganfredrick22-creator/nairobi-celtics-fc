@@ -20,7 +20,7 @@ const bookingRoutes = require('./routes/bookingRoutes');
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: config.clientUrl, credentials: true }));
+app.use(cors({ origin: [config.clientUrl, config.vercelUrl, 'https://nairobi-celtics-fc-vert.vercel.app'], credentials: true }));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

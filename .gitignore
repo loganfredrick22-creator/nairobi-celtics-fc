@@ -9,3 +9,5 @@ Thumbs.db
 client/public/images/*.psd
 client/public/images/*.ai
 client/public/images/*.tiff
+
+.vercel

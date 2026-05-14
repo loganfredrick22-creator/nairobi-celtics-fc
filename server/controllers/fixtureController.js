@@ -3,7 +3,7 @@ const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 const getFixtures = async (req, res) => {
   try {
-    const { page = 1, limit = 20, competition, venue, status } = req.query;
+    const { page = 1, limit = 50, competition, venue, status } = req.query;
     const filter = {};
     if (competition) filter.competition = competition;
     if (venue) filter.venue = venue;

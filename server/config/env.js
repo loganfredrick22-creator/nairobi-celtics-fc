@@ -9,6 +9,7 @@ module.exports = {
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET || 'dev-access-secret',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  vercelUrl: process.env.VERCEL_URL || 'https://nairobi-celtics-fc-vert.vercel.app',
   emailHost: process.env.EMAIL_HOST || 'smtp.gmail.com',
   emailPort: parseInt(process.env.EMAIL_PORT) || 587,
   emailUser: process.env.EMAIL_USER || '',
