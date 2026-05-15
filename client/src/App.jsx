@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import LiveTicker from './components/layout/LiveTicker';
 import CartDrawer from './components/shop/CartDrawer';
+import useUiStore from './store/uiStore';
 import HomePage from './pages/HomePage';
 import NewsPage from './pages/NewsPage';
 import NewsArticlePage from './pages/NewsArticlePage';
@@ -26,6 +28,11 @@ import AccountPage from './pages/AccountPage';
 
 export default function App() {
   const location = useLocation();
+  const theme = useUiStore((s) => s.theme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   return (
     <div className="min-h-screen bg-black flex flex-col">

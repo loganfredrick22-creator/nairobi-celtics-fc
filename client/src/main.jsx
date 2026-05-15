@@ -12,7 +12,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Toaster
         position="top-right"
         toastOptions={{
-          style: { background: '#1A1A1A', color: '#fff', border: '1px solid #00C853' },
+          style: { background: 'var(--color-card)', color: 'var(--color-text)', border: '1px solid var(--green)' },
           success: { iconTheme: { primary: '#00C853', secondary: '#fff' } },
           error: { iconTheme: { primary: '#ff4444', secondary: '#fff' } },
         }}

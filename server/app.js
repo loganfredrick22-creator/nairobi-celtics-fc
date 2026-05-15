@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const config = require('./config/env');
+const connectDB = require('./config/db');
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 
 const authRoutes = require('./routes/authRoutes');
@@ -38,11 +39,22 @@ const authLimiter = rateLimit({
   message: { success: false, message: 'Too many auth attempts, please try again later.' },
 });
 
+app.use('/api/', (req, res, next) => {
+  if (req.path === '/health') return next();
+  if (!connectDB.getStatus()) {
+    return res.status(503).json({ success: false, message: 'Database connection not available. Please try again shortly.' });
+  }
+  next();
+});
 app.use('/api/', generalLimiter);
 app.use('/api/auth', authLimiter);
 
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'Nairobi Celtics FC API is running' });
+  res.json({
+    success: true,
+    message: 'Nairobi Celtics FC API is running',
+    dbConnected: connectDB.getStatus(),
+  });
 });
 
 app.post('/api/seed', async (req, res) => {

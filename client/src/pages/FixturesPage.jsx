@@ -196,7 +196,12 @@ export default function FixturesPage() {
                         {standings.slice(0, 10).map((s, i) => (
                           <tr key={i} className={`border-b border-white/5 ${s.club === 'Nairobi Celtics FC' ? 'bg-green/5' : ''}`}>
                             <td className="p-2 text-gray-400">{i + 1}</td>
-                            <td className={`p-2 font-medium ${i < 4 ? 'text-green' : i > 7 ? 'text-red-400' : 'text-white'} ${s.club === 'Nairobi Celtics FC' ? 'font-bold' : ''}`}>{s.club}</td>
+                            <td className="p-2">
+                              <div className="flex items-center gap-2">
+                                <ClubLogo club={s.club} size="sm" />
+                                <span className={`font-medium ${i < 4 ? 'text-green' : i > 7 ? 'text-red-400' : 'text-white'} ${s.club === 'Nairobi Celtics FC' ? 'font-bold' : ''}`}>{s.club}</span>
+                              </div>
+                            </td>
                             <td className="p-2 text-center text-gray-400">{s.played}</td>
                             <td className="p-2 text-center text-gray-400">{s.won}</td>
                             <td className="p-2 text-center text-gray-400">{s.drawn}</td>

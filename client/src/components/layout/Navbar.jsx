@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, User, Menu, X, Ticket } from 'lucide-react';
+import { ShoppingBag, User, Menu, X, Ticket, Sun, Moon } from 'lucide-react';
 import useCartStore from '../../store/cartStore';
 import useUiStore from '../../store/uiStore';
 import useAuthStore from '../../store/authStore';
@@ -21,7 +21,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const { toggleDrawer } = useCartStore();
-  const { isMobileMenuOpen, toggleMobileMenu, closeMobileMenu } = useUiStore();
+  const { isMobileMenuOpen, toggleMobileMenu, closeMobileMenu, theme, toggleTheme } = useUiStore();
   const { isAuthenticated } = useAuthStore();
   const itemCount = useCartStore((s) => s.items.reduce((a, i) => a + i.quantity, 0));
 
@@ -61,6 +61,9 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <button onClick={toggleTheme} className="p-2 text-gray-300 hover:text-green transition-colors" title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
             <button onClick={toggleDrawer} className="relative p-2 text-gray-300 hover:text-white transition-colors">
               <ShoppingBag size={20} />
               {itemCount > 0 && (
