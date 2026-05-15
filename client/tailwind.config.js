@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        green: '#00C853',
+        green: '#006400',
         black: '#0A0A0A',
         surface: '#111111',
         card: '#1A1A1A',
@@ -15,7 +15,7 @@ export default {
         body: ['"DM Sans"', 'sans-serif'],
       },
       backgroundImage: {
-        'hero-gradient': 'linear-gradient(135deg, rgba(0,200,83,0.15) 0%, rgba(10,10,10,0.95) 100%)',
+        'hero-gradient': 'linear-gradient(135deg, rgba(0,100,0,0.15) 0%, rgba(10,10,10,0.95) 100%)',
       },
     },
   },

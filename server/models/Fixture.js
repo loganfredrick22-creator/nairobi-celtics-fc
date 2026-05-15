@@ -6,7 +6,7 @@ const fixtureSchema = new mongoose.Schema(
     opponent: { type: String, required: true },
     competition: {
       type: String,
-      enum: ['KSL', 'Kenyan Cup', 'CAF CL', 'Friendly'],
+      enum: ['KSL', 'Kenyan Cup', 'CAF CL', 'Friendly', 'FKF Premier League'],
       required: true,
     },
     venue: { type: String, enum: ['home', 'away', 'neutral'], required: true },
@@ -27,6 +27,14 @@ const fixtureSchema = new mongoose.Schema(
     matchday: { type: Number },
     isHomeGame: { type: Boolean, default: true },
     ticketAvailable: { type: Boolean, default: true },
+    ticketTiers: [
+      {
+        name: { type: String, enum: ['General', 'VIP', 'VVIP'] },
+        price: { type: Number, required: true },
+        capacity: { type: Number },
+        available: { type: Number },
+      },
+    ],
   },
   { timestamps: true }
 );
