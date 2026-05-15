@@ -3,7 +3,7 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 const { generateOrderNumber } = require('../utils/generateBookingRef');
-const { simulateCardPayment, simulateMpesaPayment } = require('../services/paymentService');
+const { simulateCardPayment, simulateMpesaPayment, simulateAirtelPayment, simulatePaypalPayment } = require('../services/paymentService');
 const { sendOrderConfirmation } = require('../services/emailService');
 const { generateReceiptPDF } = require('../services/pdfService');
 
@@ -81,6 +81,10 @@ const payOrder = async (req, res) => {
     let paymentResult;
     if (order.paymentMethod === 'mpesa') {
       paymentResult = await simulateMpesaPayment(order.total, req.body.phone);
+    } else if (order.paymentMethod === 'airtel') {
+      paymentResult = await simulateAirtelPayment(order.total, req.body.phone);
+    } else if (order.paymentMethod === 'paypal') {
+      paymentResult = await simulatePaypalPayment(order.total);
     } else {
       paymentResult = await simulateCardPayment(order.total, req.body);
     }
