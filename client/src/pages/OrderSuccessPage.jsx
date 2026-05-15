@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, Package, ArrowRight, Printer, CreditCard } from 'lucide-react';
+import { CheckCircle, Package, ArrowRight, Printer, CreditCard, ExternalLink } from 'lucide-react';
 import { shopService } from '../services/shopService';
 import { formatCurrency } from '../utils/formatCurrency';
 import Button from '../components/ui/Button';
@@ -105,6 +105,13 @@ export default function OrderSuccessPage() {
                       <CreditCard size={10} />
                       Transaction ref: {order.paymentRef || order.orderNumber}
                     </p>
+                    {order.receiptUrl && (
+                      <a href={order.receiptUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-[10px] text-green hover:text-green/80 underline flex items-center gap-1 mt-1"
+                      >
+                        <ExternalLink size={10} /> View receipt in Stripe dashboard
+                      </a>
+                    )}
                   </div>
                 </div>
               )}

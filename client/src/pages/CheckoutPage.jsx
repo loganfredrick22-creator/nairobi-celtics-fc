@@ -1,10 +1,13 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, CreditCard, Smartphone, Shield, ArrowLeft, AlertCircle, Phone, Loader2, Building2, Globe, ShoppingBag } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Check, CreditCard, Smartphone, Shield, ArrowLeft, AlertCircle, Phone, Loader2, Globe, ShoppingBag } from 'lucide-react';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import { shopService } from '../services/shopService';
+import { paymentsService } from '../services/paymentsService';
 import { formatCurrency } from '../utils/formatCurrency';
 import ImageWithFallback from '../components/ui/ImageWithFallback';
 import Button from '../components/ui/Button';
@@ -27,25 +30,6 @@ const paymentMethods = [
   { id: 'paypal', label: 'PayPal', icon: Globe, desc: 'Pay with PayPal account' },
 ];
 
-const cardIcons = { Visa: '💳', Mastercard: '💳', 'American Express': '💳', Discover: '💳' };
-
-const formatCardNumber = (v) => v.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim().slice(0, 19);
-
-const formatExpiry = (v) => {
-  const d = v.replace(/\D/g, '');
-  if (d.length > 2) return d.slice(0, 2) + '/' + d.slice(2, 4);
-  return d;
-};
-
-const detectCardType = (n) => {
-  const c = n.replace(/\s/g, '');
-  if (/^4/.test(c)) return 'Visa';
-  if (/^5[1-5]/.test(c)) return 'Mastercard';
-  if (/^3[47]/.test(c)) return 'American Express';
-  if (/^6(?:011|5)/.test(c)) return 'Discover';
-  return '';
-};
-
 const mpesaPrefixes = ['070', '071', '072', '074', '075', '076', '079', '010', '011'];
 const isValidMpesaPhone = (p) => {
   const d = p.replace(/\D/g, '');
@@ -54,10 +38,23 @@ const isValidMpesaPhone = (p) => {
   return false;
 };
 
-export default function CheckoutPage() {
+const CARD_STYLE = {
+  style: {
+    base: {
+      fontSize: '16px', color: '#fff', fontFamily: '"DM Sans", sans-serif',
+      '::placeholder': { color: '#6B7280' },
+    },
+    invalid: { color: '#ef4444' },
+  },
+};
+
+function CheckoutForm({ stripePromise, stripeReady }) {
   const navigate = useNavigate();
+  const stripe = useStripe();
+  const elements = useElements();
   const { items, subtotal, promoDiscount, clearCart } = useCartStore();
   const { user } = useAuthStore();
+
   const [step, setStep] = useState(0);
   const [delivery, setDelivery] = useState({
     method: 'clickcollect', fullName: user ? `${user.firstName} ${user.lastName}` : '',
@@ -65,50 +62,31 @@ export default function CheckoutPage() {
   });
   const [paymentMethod, setPaymentMethod] = useState('mpesa');
   const [processing, setProcessing] = useState(false);
-  const [payState, setPayState] = useState('idle'); // idle | stk_sent | authenticating | success | failed
+  const [payState, setPayState] = useState('idle');
   const [payError, setPayError] = useState('');
-  const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
-  const [cardErrors, setCardErrors] = useState({});
   const [phoneInput, setPhoneInput] = useState(user?.phone || '');
   const [phoneError, setPhoneError] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [cardError, setCardError] = useState('');
   const orderRef = useRef(null);
 
   const deliveryFee = deliveryOptions.find((d) => d.value === delivery.method)?.price || 0;
   const total = Math.max(0, subtotal - promoDiscount + deliveryFee);
 
-  const validateCard = () => {
-    const errs = {};
-    const cleaned = cardDetails.number.replace(/\s/g, '');
-    if (!cleaned || cleaned.length < 13) errs.number = 'Enter a valid card number';
-    if (!cardDetails.expiry || cardDetails.expiry.length < 5) errs.expiry = 'Enter MM/YY';
-    if (cardDetails.expiry.length >= 5) {
-      const [mm, yy] = cardDetails.expiry.split('/');
-      const now = new Date();
-      if (parseInt(yy) < now.getFullYear() % 100 || (parseInt(yy) === now.getFullYear() % 100 && parseInt(mm) < now.getMonth() + 1)) {
-        errs.expiry = 'Card has expired';
-      }
-    }
-    const ct = detectCardType(cleaned);
-    const expectedCvv = ct === 'American Express' ? 4 : 3;
-    if (!cardDetails.cvv || cardDetails.cvv.length !== expectedCvv) errs.cvv = `${expectedCvv} digits required`;
-    if (!cardDetails.name.trim()) errs.name = 'Enter cardholder name';
-    setCardErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
   const handlePlaceOrder = async () => {
-    if (paymentMethod === 'card' && !validateCard()) return;
-    if ((paymentMethod === 'mpesa' || paymentMethod === 'airtel') && !phoneInput.trim()) {
-      setPhoneError('Enter your phone number');
-      return;
+    if (paymentMethod === 'mpesa' || paymentMethod === 'airtel') {
+      if (!phoneInput.trim()) { setPhoneError('Enter your phone number'); return; }
+      if (!isValidMpesaPhone(phoneInput)) { setPhoneError('Enter a valid Safaricom number (e.g. 0712 345 678)'); return; }
     }
-    if ((paymentMethod === 'mpesa' || paymentMethod === 'airtel') && !isValidMpesaPhone(phoneInput)) {
-      setPhoneError('Enter a valid Safaricom number (e.g. 0712 345 678)');
+
+    if (paymentMethod === 'card' && stripeReady && (!stripe || !elements)) {
+      setCardError('Stripe is still loading. Please wait.');
       return;
     }
 
     setProcessing(true);
     setPayError('');
+    setCardError('');
     setPayState('idle');
 
     try {
@@ -131,6 +109,21 @@ export default function CheckoutPage() {
         await new Promise((r) => setTimeout(r, 1500));
       }
 
+      if (paymentMethod === 'card' && stripeReady && stripe) {
+        setPayState('authenticating');
+        const intentRes = await paymentsService.createPaymentIntent(order.total, 'kes', order.orderNumber);
+        if (!intentRes.data?.success) throw new Error(intentRes.data?.message || 'Payment service unavailable');
+
+        const cardEl = elements.getElement(CardElement);
+        const confirmRes = await stripe.confirmCardPayment(intentRes.data.clientSecret, {
+          payment_method: { card: cardEl, billing_details: { name: cardName || delivery.fullName } },
+        });
+
+        if (confirmRes.error) throw new Error(confirmRes.error.message);
+        if (confirmRes.paymentIntent.status !== 'succeeded') throw new Error('Payment was not successful');
+        stripe.__paymentIntentId = confirmRes.paymentIntent.id;
+      }
+
       if (paymentMethod === 'paypal') {
         setPayState('authenticating');
         await new Promise((r) => setTimeout(r, 3000));
@@ -138,12 +131,7 @@ export default function CheckoutPage() {
 
       const payData = {};
       if (paymentMethod === 'mpesa' || paymentMethod === 'airtel') payData.phone = phoneInput;
-      if (paymentMethod === 'card') {
-        payData.cardNumber = cardDetails.number;
-        payData.expiry = cardDetails.expiry;
-        payData.cvv = cardDetails.cvv;
-        payData.name = cardDetails.name;
-      }
+      if (stripe?.__paymentIntentId) payData.paymentIntentId = stripe.__paymentIntentId;
 
       await shopService.payOrder(order.orderNumber, payData);
 
@@ -154,7 +142,7 @@ export default function CheckoutPage() {
       toast.success('Payment successful!');
     } catch (err) {
       setPayState('failed');
-      const msg = err.response?.data?.message || 'Payment failed. Please try again.';
+      const msg = err.response?.data?.message || err.message || 'Payment failed. Please try again.';
       setPayError(msg);
       toast.error(msg);
     } finally {
@@ -257,7 +245,7 @@ export default function CheckoutPage() {
                     {paymentMethods.map((m) => {
                       const Icon = m.icon;
                       return (
-                        <button key={m.id} onClick={() => { setPaymentMethod(m.id); setPayError(''); setPhoneError(''); setCardErrors({}); }}
+                        <button key={m.id} onClick={() => { setPaymentMethod(m.id); setPayError(''); setPhoneError(''); setCardError(''); }}
                           className={`bg-card rounded-xl p-4 border text-center transition-all ${paymentMethod === m.id ? 'border-green bg-green/[0.03] ring-1 ring-green/30' : 'border-white/5 hover:border-white/20'}`}
                         >
                           <Icon size={24} className={`mx-auto mb-2 ${paymentMethod === m.id ? 'text-green' : 'text-gray-400'}`} />
@@ -274,20 +262,14 @@ export default function CheckoutPage() {
                         <div className="flex items-center gap-2 mb-1">
                           {paymentMethod === 'mpesa' ? (
                             <img src="https://www.safaricom.co.ke/images/logo.png" alt="M-Pesa" className="h-6" onError={(e) => { e.target.style.display = 'none' }} />
-                          ) : (
-                            <Phone size={20} className="text-red-500" />
-                          )}
+                          ) : <Phone size={20} className="text-red-500" />}
                           <span className="text-sm font-medium">{paymentMethod === 'mpesa' ? 'M-Pesa' : 'Airtel Money'}</span>
                         </div>
                         <p className="text-xs text-gray-400">You will receive an STK Push prompt on your phone to enter your PIN.</p>
                         <div>
                           <label className="text-xs text-gray-500 mb-1 block">Phone Number</label>
-                          <input
-                            value={phoneInput}
-                            onChange={(e) => { setPhoneInput(e.target.value); setPhoneError(''); }}
-                            placeholder="e.g. 0712 345 678"
-                            className={`w-full ${phoneError ? 'border-red-500' : ''}`}
-                          />
+                          <input value={phoneInput} onChange={(e) => { setPhoneInput(e.target.value); setPhoneError(''); }}
+                            placeholder="e.g. 0712 345 678" className={`w-full ${phoneError ? 'border-red-500' : ''}`} />
                           {phoneError && <p className="text-xs text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={11} />{phoneError}</p>}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500 bg-black/30 rounded-lg p-2">
@@ -302,65 +284,29 @@ export default function CheckoutPage() {
                         <div className="bg-card rounded-xl p-4 border border-white/5 space-y-3">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium">Card Details</span>
-                            <div className="flex gap-1 text-lg" title={detectCardType(cardDetails.number) || 'Card types accepted'}>
-                              <span>Visa</span><span className="text-xs text-gray-500">|</span><span>MC</span><span className="text-xs text-gray-500">|</span><span>Amex</span>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 mb-1 block">Card Number</label>
-                            <input
-                              value={cardDetails.number}
-                              onChange={(e) => setCardDetails({ ...cardDetails, number: formatCardNumber(e.target.value) })}
-                              placeholder="1234 5678 9012 3456"
-                              maxLength={19}
-                              className={`w-full ${cardErrors.number ? 'border-red-500' : ''}`}
-                            />
-                            {cardErrors.number && <p className="text-xs text-red-400 mt-1">{cardErrors.number}</p>}
-                            {detectCardType(cardDetails.number) && !cardErrors.number && (
-                              <p className="text-xs text-green mt-1">{detectCardType(cardDetails.number)} detected</p>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-xs text-gray-500 mb-1 block">Expiry</label>
-                              <input
-                                value={cardDetails.expiry}
-                                onChange={(e) => setCardDetails({ ...cardDetails, expiry: formatExpiry(e.target.value) })}
-                                placeholder="MM/YY"
-                                maxLength={5}
-                                className={`w-full ${cardErrors.expiry ? 'border-red-500' : ''}`}
-                              />
-                              {cardErrors.expiry && <p className="text-xs text-red-400 mt-1">{cardErrors.expiry}</p>}
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 mb-1 block">
-                                CVV
-                                <span className="text-gray-600 ml-1">({detectCardType(cardDetails.number) === 'American Express' ? '4' : '3'} digits)</span>
-                              </label>
-                              <input
-                                value={cardDetails.cvv}
-                                onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                                placeholder="•••"
-                                maxLength={4}
-                                type="password"
-                                className={`w-full ${cardErrors.cvv ? 'border-red-500' : ''}`}
-                              />
-                              {cardErrors.cvv && <p className="text-xs text-red-400 mt-1">{cardErrors.cvv}</p>}
-                            </div>
+                            <div className="flex gap-1 text-xs text-gray-500"><span>Visa</span><span>|</span><span>Mastercard</span><span>|</span><span>Amex</span></div>
                           </div>
                           <div>
                             <label className="text-xs text-gray-500 mb-1 block">Cardholder Name</label>
-                            <input
-                              value={cardDetails.name}
-                              onChange={(e) => setCardDetails({ ...cardDetails, name: e.target.value })}
-                              placeholder="John Doe"
-                              className={`w-full ${cardErrors.name ? 'border-red-500' : ''}`}
-                            />
-                            {cardErrors.name && <p className="text-xs text-red-400 mt-1">{cardErrors.name}</p>}
+                            <input value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="John Doe" className="w-full" />
                           </div>
+                          <div>
+                            <label className="text-xs text-gray-500 mb-1 block">Card Number</label>
+                            <div className="bg-black border border-gray-700 rounded-lg p-3">
+                              <CardElement options={CARD_STYLE} />
+                            </div>
+                          </div>
+                          {cardError && <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={11} />{cardError}</p>}
+                          {stripeReady ? (
+                            <p className="text-xs text-green">Stripe test mode — use card 4242 4242 4242 4242, any future date, any CVC</p>
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-400/5 rounded-lg p-2">
+                              <AlertCircle size={12} /> Stripe not configured — simulated card payment will be used.
+                            </div>
+                          )}
                           <div className="flex items-center gap-2 text-xs text-gray-500 bg-black/30 rounded-lg p-2">
                             <Shield size={12} className="text-green" />
-                            3D Secure enabled. Your card details are encrypted.
+                            Secured by Stripe. 3D Secure may be required.
                           </div>
                         </div>
                       </motion.div>
@@ -368,15 +314,9 @@ export default function CheckoutPage() {
 
                     {paymentMethod === 'paypal' && (
                       <motion.div key="paypal" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="bg-card rounded-xl p-4 border border-white/5 space-y-3">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Globe size={20} className="text-blue-500" />
-                          <span className="text-sm font-medium">PayPal</span>
-                        </div>
+                        <div className="flex items-center gap-2 mb-1"><Globe size={20} className="text-blue-500" /><span className="text-sm font-medium">PayPal</span></div>
                         <p className="text-xs text-gray-400">You will be redirected to PayPal to complete your purchase securely.</p>
-                        <div className="flex items-center gap-2 text-xs text-gray-500 bg-black/30 rounded-lg p-2">
-                          <Shield size={12} className="text-green" />
-                          PayPal Buyer Protection included.
-                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500 bg-black/30 rounded-lg p-2"><Shield size={12} className="text-green" />PayPal Buyer Protection included.</div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -406,7 +346,7 @@ export default function CheckoutPage() {
                   <div className="bg-card rounded-xl p-4 border border-white/5 space-y-3 text-sm mb-6">
                     <div className="flex justify-between"><span className="text-gray-400">Delivery to</span><span className="text-white text-right">{delivery.fullName}, {delivery.city || delivery.county || '—'}</span></div>
                     <div className="flex justify-between"><span className="text-gray-400">Method</span><span className="text-white capitalize">{deliveryOptions.find((d) => d.value === delivery.method)?.label}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Payment</span><span className="text-white capitalize">{paymentMethod === 'mpesa' ? 'M-Pesa' : paymentMethod === 'card' ? `Card (${detectCardType(cardDetails.number) || '••••'} ${cardDetails.number.slice(-4)})` : paymentMethod === 'airtel' ? 'Airtel Money' : 'PayPal'}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Payment</span><span className="text-white capitalize">{paymentMethod === 'mpesa' ? 'M-Pesa' : paymentMethod === 'card' ? 'Card (Stripe)' : paymentMethod === 'airtel' ? 'Airtel Money' : 'PayPal'}</span></div>
                     <div className="border-t border-white/5 pt-3 space-y-1">
                       {items.map((item, i) => (
                         <div key={i} className="flex justify-between text-xs">
@@ -419,11 +359,9 @@ export default function CheckoutPage() {
 
                   {payState === 'stk_sent' && (
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-card rounded-xl p-6 border border-green/30 text-center space-y-3 mb-4">
-                      <div className="w-16 h-16 bg-green/10 rounded-full flex items-center justify-center mx-auto">
-                        <Smartphone size={32} className="text-green animate-pulse" />
-                      </div>
+                      <div className="w-16 h-16 bg-green/10 rounded-full flex items-center justify-center mx-auto"><Smartphone size={32} className="text-green animate-pulse" /></div>
                       <p className="text-white font-medium">STK Push Sent!</p>
-                      <p className="text-sm text-gray-400">Check your phone and enter your {paymentMethod === 'mpesa' ? 'M-Pesa' : 'Airtel Money'} PIN to complete payment.</p>
+                      <p className="text-sm text-gray-400">Check your phone and enter your {paymentMethod === 'mpesa' ? 'M-Pesa' : 'Airtel Money'} PIN.</p>
                       <p className="text-xs text-gray-500">Amount: <span className="text-green font-display">{formatCurrency(total)}</span></p>
                       <Loader2 size={18} className="animate-spin mx-auto text-green" />
                     </motion.div>
@@ -433,7 +371,7 @@ export default function CheckoutPage() {
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl p-6 border border-white/10 text-center space-y-3 mb-4">
                       <Loader2 size={28} className="animate-spin mx-auto text-green" />
                       <p className="text-white font-medium">
-                        {paymentMethod === 'paypal' ? 'Redirecting to PayPal...' : paymentMethod === 'card' ? 'Processing card payment...' : 'Confirming payment...'}
+                        {paymentMethod === 'paypal' ? 'Redirecting to PayPal...' : paymentMethod === 'card' ? 'Processing card payment with Stripe...' : 'Confirming payment...'}
                       </p>
                       <p className="text-xs text-gray-500">Please do not close this page.</p>
                     </motion.div>
@@ -441,9 +379,7 @@ export default function CheckoutPage() {
 
                   {payState === 'success' && (
                     <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-green/5 border border-green/30 rounded-xl p-6 text-center space-y-2 mb-4">
-                      <div className="w-12 h-12 bg-green rounded-full flex items-center justify-center mx-auto">
-                        <Check size={24} className="text-black" />
-                      </div>
+                      <div className="w-12 h-12 bg-green rounded-full flex items-center justify-center mx-auto"><Check size={24} className="text-black" /></div>
                       <p className="text-green font-medium">Payment Successful!</p>
                       <p className="text-xs text-gray-400">Redirecting to confirmation...</p>
                     </motion.div>
@@ -473,15 +409,36 @@ export default function CheckoutPage() {
                   <span className="text-white font-semibold">Total</span>
                   <span className="text-green text-xl font-display">{formatCurrency(total)}</span>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-gray-600 pt-2 border-t border-white/5">
-                  <Shield size={12} className="text-green" />
-                  Secured checkout. No real money processed.
-                </div>
+                <div className="flex items-center gap-2 text-[10px] text-gray-600 pt-2 border-t border-white/5"><Shield size={12} className="text-green" />Secured checkout</div>
               </div>
             </div>
           </div>
         </div>
       </section>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  const [stripePromise, setStripePromise] = useState(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    paymentsService.getConfig().then(({ data }) => {
+      if (data.ready && data.publishableKey) {
+        setStripePromise(loadStripe(data.publishableKey));
+        setReady(true);
+      }
+    }).catch(() => {});
+  }, []);
+
+  if (!stripePromise) {
+    return <CheckoutForm stripePromise={null} stripeReady={false} />;
+  }
+
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutForm stripePromise={stripePromise} stripeReady={ready} />
+    </Elements>
   );
 }

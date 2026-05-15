@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 const { generateOrderNumber } = require('../utils/generateBookingRef');
 const { simulateCardPayment, simulateMpesaPayment, simulateAirtelPayment, simulatePaypalPayment } = require('../services/paymentService');
+const stripeService = require('../services/stripeService');
 const { sendOrderConfirmation } = require('../services/emailService');
 const { generateReceiptPDF } = require('../services/pdfService');
 
@@ -85,6 +86,14 @@ const payOrder = async (req, res) => {
       paymentResult = await simulateAirtelPayment(order.total, req.body.phone);
     } else if (order.paymentMethod === 'paypal') {
       paymentResult = await simulatePaypalPayment(order.total);
+    } else if (order.paymentMethod === 'card' && stripeService.isReady()) {
+      const intentResult = await stripeService.createPaymentIntent(order.total, 'kes', { orderNumber: order.orderNumber });
+      if (!intentResult.success) {
+        order.paymentStatus = 'failed';
+        await order.save();
+        return sendError(res, 'Payment service unavailable. Try another method.', 500);
+      }
+      paymentResult = { success: true, ref: intentResult.id, paymentIntentId: intentResult.id, cardType: 'Stripe', last4: '' };
     } else {
       paymentResult = await simulateCardPayment(order.total, req.body);
     }
@@ -93,6 +102,11 @@ const payOrder = async (req, res) => {
       order.paymentStatus = 'paid';
       order.paymentRef = paymentResult.ref;
       order.orderStatus = 'confirmed';
+
+      if (paymentResult.paymentIntentId) {
+        order.paymentIntentId = paymentResult.paymentIntentId;
+        order.receiptUrl = stripeService.generateReceiptUrl(paymentResult.paymentIntentId);
+      }
 
       const deliveryDays = { clickcollect: 0, nairobi: 1, nationwide: 5, eastafrica: 10, international: 21 };
       const days = deliveryDays[order.deliveryMethod] || 5;
