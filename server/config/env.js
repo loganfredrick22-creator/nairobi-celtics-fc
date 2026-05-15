@@ -16,7 +16,8 @@ module.exports = {
   emailPass: process.env.EMAIL_PASS || '',
   mpesaConsumerKey: process.env.MPESA_CONSUMER_KEY || '',
   mpesaConsumerSecret: process.env.MPESA_CONSUMER_SECRET || '',
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder',
-  stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder',
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+  mpesaEnv: process.env.MPESA_ENV || 'sandbox',
+  mpesaShortcode: process.env.MPESA_SHORTCODE || '',
+  mpesaPasskey: process.env.MPESA_PASSKEY || '',
+  mpesaCallbackUrl: process.env.MPESA_CALLBACK_URL || '',
 };

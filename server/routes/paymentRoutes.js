@@ -1,38 +1,68 @@
 const express = require('express');
 const router = express.Router();
-const config = require('../config/env');
-const { createPaymentIntent, retrievePaymentIntent, isReady } = require('../services/stripeService');
+const mpesaService = require('../services/mpesaService');
+const Order = require('../models/Order');
 
 router.get('/config', (req, res) => {
   res.json({
-    publishableKey: config.stripePublishableKey,
-    ready: isReady(),
+    mpesaConfigured: mpesaService.isConfigured(),
+    mpesaEnv: process.env.MPESA_ENV || 'sandbox',
   });
 });
 
-router.post('/create-payment-intent', async (req, res) => {
+router.post('/mpesa-stk', async (req, res) => {
   try {
-    const { amount, currency, orderNumber } = req.body;
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ success: false, message: 'Invalid amount' });
+    const { phone, amount, orderNumber } = req.body;
+    if (!phone || !amount || !orderNumber) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
-    const result = await createPaymentIntent(amount, currency || 'kes', { orderNumber });
-    if (!result.success) {
-      return res.status(500).json({ success: false, message: result.error });
-    }
-    res.json({ success: true, clientSecret: result.clientSecret, paymentIntentId: result.id });
+    const result = await mpesaService.stkPush(phone, amount, orderNumber);
+    res.json({ success: result.success, checkoutRequestId: result.checkoutRequestId, message: result.message, simulated: result.simulated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-router.get('/payment-intent/:id', async (req, res) => {
+router.post('/mpesa-callback', async (req, res) => {
   try {
-    const pi = await retrievePaymentIntent(req.params.id);
-    if (!pi) return res.status(404).json({ success: false, message: 'Payment intent not found' });
-    res.json({ success: true, paymentIntent: pi });
+    const { Body } = req.body;
+    const orderNumber = req.query.order;
+
+    if (Body?.stkCallback?.ResultCode === 0) {
+      const checkoutRequestId = Body.stkCallback.CheckoutRequestID;
+      const metadata = Body.stkCallback.CallbackMetadata?.Item || [];
+      const mpesaRef = metadata.find((m) => m.Name === 'MpesaReceiptNumber')?.Value || '';
+      const phone = metadata.find((m) => m.Name === 'PhoneNumber')?.Value || '';
+      const amount = metadata.find((m) => m.Name === 'Amount')?.Value || 0;
+
+      if (orderNumber) {
+        const order = await Order.findOne({ orderNumber });
+        if (order && order.paymentStatus === 'pending') {
+          order.paymentStatus = 'paid';
+          order.paymentRef = mpesaRef || `MPESA-${checkoutRequestId.slice(-10)}`;
+          order.orderStatus = 'confirmed';
+          const deliveryDays = { clickcollect: 0, nairobi: 1, nationwide: 5, eastafrica: 10, international: 21 };
+          order.estimatedDelivery = new Date(Date.now() + (deliveryDays[order.deliveryMethod] || 5) * 24 * 60 * 60 * 1000);
+          await order.save();
+
+          for (const item of order.items) {
+            const Product = require('../models/Product');
+            const product = await Product.findById(item.product);
+            if (product) {
+              const sizeObj = product.sizes.find((s) => s.size === item.size);
+              if (sizeObj) sizeObj.stock -= item.quantity;
+              product.totalStock = product.sizes.reduce((sum, s) => sum + s.stock, 0);
+              await product.save();
+            }
+          }
+        }
+      }
+    }
+
+    res.json({ ResultCode: 0, ResultDesc: 'Success' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('M-Pesa callback error:', error.message);
+    res.json({ ResultCode: 0, ResultDesc: 'Success' });
   }
 });
 

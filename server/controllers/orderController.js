@@ -4,7 +4,7 @@ const User = require('../models/User');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 const { generateOrderNumber } = require('../utils/generateBookingRef');
 const { simulateCardPayment, simulateMpesaPayment, simulateAirtelPayment, simulatePaypalPayment } = require('../services/paymentService');
-const stripeService = require('../services/stripeService');
+const mpesaService = require('../services/mpesaService');
 const { sendOrderConfirmation } = require('../services/emailService');
 const { generateReceiptPDF } = require('../services/pdfService');
 
@@ -81,19 +81,22 @@ const payOrder = async (req, res) => {
 
     let paymentResult;
     if (order.paymentMethod === 'mpesa') {
-      paymentResult = await simulateMpesaPayment(order.total, req.body.phone);
+      if (mpesaService.isConfigured()) {
+        const mpesaResult = await mpesaService.stkPush(req.body.phone, order.total, order.orderNumber);
+        if (mpesaResult.success) {
+          paymentResult = { success: true, ref: `MPESA-${mpesaResult.checkoutRequestId?.slice(-10) || Date.now().toString(36).toUpperCase()}`, checkoutRequestId: mpesaResult.checkoutRequestId };
+        } else if (mpesaResult.simulated) {
+          paymentResult = await simulateMpesaPayment(order.total, req.body.phone);
+        } else {
+          return sendError(res, mpesaResult.error || 'M-Pesa payment failed', 400);
+        }
+      } else {
+        paymentResult = await simulateMpesaPayment(order.total, req.body.phone);
+      }
     } else if (order.paymentMethod === 'airtel') {
       paymentResult = await simulateAirtelPayment(order.total, req.body.phone);
     } else if (order.paymentMethod === 'paypal') {
       paymentResult = await simulatePaypalPayment(order.total);
-    } else if (order.paymentMethod === 'card' && stripeService.isReady()) {
-      const intentResult = await stripeService.createPaymentIntent(order.total, 'kes', { orderNumber: order.orderNumber });
-      if (!intentResult.success) {
-        order.paymentStatus = 'failed';
-        await order.save();
-        return sendError(res, 'Payment service unavailable. Try another method.', 500);
-      }
-      paymentResult = { success: true, ref: intentResult.id, paymentIntentId: intentResult.id, cardType: 'Stripe', last4: '' };
     } else {
       paymentResult = await simulateCardPayment(order.total, req.body);
     }
@@ -105,7 +108,7 @@ const payOrder = async (req, res) => {
 
       if (paymentResult.paymentIntentId) {
         order.paymentIntentId = paymentResult.paymentIntentId;
-        order.receiptUrl = stripeService.generateReceiptUrl(paymentResult.paymentIntentId);
+        order.receiptUrl = `https://developer.safaricom.co.ke/test_credentials?mpesa_ref=${paymentResult.ref}`;
       }
 
       const deliveryDays = { clickcollect: 0, nairobi: 1, nationwide: 5, eastafrica: 10, international: 21 };
